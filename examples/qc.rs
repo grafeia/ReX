@@ -5,7 +5,6 @@ use rex::{
     parser::parse,
     font::FontContext
 };
-use font::pathfinder_impl::OutlineEncoder;
 
 const SAMPLES: &[&str] = &[
     r"\iint \sqrt{1 + f^2(x,t,t)}\,\mathrm{d}x\mathrm{d}y\mathrm{d}t = \sum \xi(t)",
@@ -40,7 +39,7 @@ fn main() {
     let fonts: Vec<_> = paths.into_iter()
         .filter_map(|path| {
             fs::read(&path).ok()
-            .and_then(|data| font::OpenTypeFont::parse(&data, &mut OutlineEncoder).ok())
+            .and_then(|data| font::parse(&data).ok())
             .map(|font| (font, path))
         })
         .filter(|(font, _)| font.math.is_some())

@@ -15,7 +15,9 @@ vello = ["dep:vello"]
 vello_cpu = ["dep:vello_cpu"]
 
 [dependencies]
-font = { git = "https://github.com/pdf-rs/font", branch = "vello", features = ["opentype", "woff", "math", "cff"] }
+# `opentype-api` is pdf-rs/font#11 (base `vello`): `parse()` is OpenType-only and
+# returns the font itself. Switch back to `branch = "vello"` once #11 is merged.
+font = { git = "https://github.com/pdf-rs/font", branch = "opentype-api", features = ["opentype", "woff", "math", "cff"] }
 # pathfinder stays as the geometry crate (`Outline`); its renderer, exporter and
 # colour crate are gone from this crate — see src/render/.
 pathfinder_geometry = { git = "https://github.com/servo/pathfinder/" }

@@ -5,7 +5,7 @@ mod style;
 pub use unicode_math::AtomType;
 pub use style::style_symbol;
 
-use font::{opentype::{OpenTypeFont, math::MathHeader}, pathfinder_impl::OutlineEncoder, GlyphId};
+use font::{opentype::{OpenTypeFont, math::MathHeader}, GlyphId};
 pub use font::opentype::math::{
     assembly::{Direction},
     MathConstants,
@@ -17,12 +17,14 @@ use crate::error::FontError;
 
 /// Parsed glyphs are encoded as pathfinder outlines: `rex` keeps `pathfinder_content`
 /// as its geometry type, and kurbo paths are made from it in `render::bez`.
-pub type MathFont = OpenTypeFont<OutlineEncoder>;
+///
+/// No type parameter: `OutlineEncoder` is the default of `OpenTypeFont`.
+pub type MathFont = OpenTypeFont;
 
 /// Parse a font, with the MATH table `rex` needs. Fails for anything that is not
-/// OpenType/CFF; the error is the font crate's, not rex's (that one is `Clone`).
+/// OpenType/WOFF; the error is the font crate's, not rex's (that one is `Clone`).
 pub fn parse(data: &[u8]) -> Result<MathFont, font::FontError> {
-    OpenTypeFont::parse(data, &mut OutlineEncoder)
+    font::parse(data)
 }
 
 #[derive(Clone)]
@@ -45,7 +47,7 @@ impl<'f> FontContext<'f> {
         let attachment = self.math.glyph_info.top_accent_attachment.get(gid).map(|info| info.value).unwrap_or_default();
         // A glyph's shape is `Simple`/`Compound`/`Empty` now; `flatten` composes compound
         // glyphs, so the bounds are the real ink box rather than the first component's.
-        let outline = font::pathfinder_impl::flatten(font, GlyphId(gid as u32))
+        let outline = font.glyph_outline(GlyphId(gid as u32))
             .ok_or(FontError::MissingGlyphGID(gid))?;
         let bbox = outline.bounds();
         let ll = bbox.lower_left();
