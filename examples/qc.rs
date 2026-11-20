@@ -1,14 +1,11 @@
 use std::fs;
-use pathfinder_export::{Export, FileFormat};
-use pathfinder_renderer::scene::Scene;
-use pathfinder_geometry::{rect::RectF, vector::vec2f};
 use rex::{
-    render::{Renderer, SceneWrapper},
+    render::{BoundsBackend, Renderer, SvgBackend},
     layout::{Grid, Layout, engine, LayoutSettings, Style},
     parser::parse,
     font::FontContext
 };
-use font::{Font, OpenTypeFont};
+use font::pathfinder_impl::OutlineEncoder;
 
 const SAMPLES: &[&str] = &[
     r"\iint \sqrt{1 + f^2(x,t,t)}\,\mathrm{d}x\mathrm{d}y\mathrm{d}t = \sum \xi(t)",
@@ -28,14 +25,25 @@ fn main() {
     env_logger::init();
 
     let samples: Vec<_> = SAMPLES.iter().cloned().map(|tex| parse(dbg!(tex)).unwrap()).collect();
-    let fonts: Vec<_> = fs::read_dir("fonts").unwrap()
-        .filter_map(|e| e.ok())
-        .filter_map(|entry| {
-            fs::read(entry.path()).ok()
-            .and_then(|data| font::parse(&data).ok().and_then(|f| f.downcast_box::<OpenTypeFont>().ok()))
-            .map(|font| (font, entry.path()))
+
+    // Fonts: the paths given on the command line, else everything in `fonts/`.
+    let mut paths: Vec<std::path::PathBuf> = std::env::args().skip(1).map(Into::into).collect();
+    if paths.is_empty() {
+        paths = fs::read_dir("fonts")
+            .map(|dir| dir.filter_map(|e| e.ok()).map(|e| e.path()).collect())
+            .unwrap_or_default();
+    }
+    if paths.is_empty() {
+        eprintln!("no fonts: pass .otf files as arguments, or put them in ./fonts");
+        std::process::exit(1);
+    }
+    let fonts: Vec<_> = paths.into_iter()
+        .filter_map(|path| {
+            fs::read(&path).ok()
+            .and_then(|data| font::OpenTypeFont::parse(&data, &mut OutlineEncoder).ok())
+            .map(|font| (font, path))
         })
-        .filter(|(font, path)| font.math.is_some())
+        .filter(|(font, _)| font.math.is_some())
         .collect();
 
     let mut grid = Grid::new();
@@ -58,14 +66,37 @@ fn main() {
     layout.add_node(grid.build());
 
     let mut renderer = Renderer::new();
-    let (x0, y0, x1, y1) = renderer.size(&layout);
-    let mut scene = Scene::new();
-    scene.set_view_box(RectF::from_points(vec2f(x0 as f32, y0 as f32), vec2f(x1 as f32, y1 as f32)));
-    let mut backend = SceneWrapper::new(&mut scene);
+    let mut backend = SvgBackend::new();
     renderer.render(&layout, &mut backend);
-    
-    let mut buf = Vec::new();
-    scene.export(&mut buf, FileFormat::SVG).unwrap();
 
-    fs::write("qc.svg", &buf).unwrap();
+    let svg = backend.finish();
+    fs::write("qc.svg", &svg).unwrap();
+    println!("qc.svg: {} bytes, {} paths", svg.len(), svg.matches("<path").count());
+
+    // With the CPU backend the same grid also comes out as a PNG, which is the only way
+    // to look at the result without an SVG rasteriser.
+    #[cfg(feature = "vello_cpu")]
+    {
+        use rex::render::CpuBackend;
+        use vello_cpu::kurbo::Affine;
+
+        let mut probe = BoundsBackend::new();
+        renderer.render(&layout, &mut probe);
+        let bb = probe.bounds().unwrap();
+        let scale = 2.0; // ~20 px per em at the 10 Px layout em
+        let pad = 8.0;
+        let w_px = (bb.width() as f64 * scale + 2.0 * pad).ceil() as u16;
+        let h_px = (bb.height() as f64 * scale + 2.0 * pad).ceil() as u16;
+        let transform = Affine::translate((
+            pad - bb.min_x() as f64 * scale,
+            pad - bb.min_y() as f64 * scale,
+        )) * Affine::scale(scale);
+
+        let mut backend = CpuBackend::new(w_px, h_px, transform);
+        backend.fill_background(255, 255, 255);
+        renderer.render(&layout, &mut backend);
+        let png = backend.finish().into_png().expect("cannot encode png");
+        fs::write("qc.png", &png).unwrap();
+        println!("qc.png: {}x{} px, {} bytes", w_px, h_px, png.len());
+    }
 }

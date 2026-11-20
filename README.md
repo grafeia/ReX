@@ -85,13 +85,32 @@ See the `samples/` folder for the original SVG source.
 First note that ReX is currently in heavy development and is not intended to be used in any way other than for testing and debugging.
 That being said, you can install ReX using a Rust compiler.  Instructions are found [here](https://www.rustup.rs/).
 
-You can look at the examples in the `tests/` folder to see ReX in action, or simply run
+ReX builds as a library plus examples; there is no binary. To render one formula:
 
 ```
-cargo run 'x = \frac{-b \pm \sqrt{b^2 - 4ac}{2a}'
+cargo run --example render -- fonts/xits.otf 'x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}' out.svg
+cargo run --example render --features vello_cpu -- fonts/xits.otf 'x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}' out.png 32
 ```
 
-for a standalone SVG.  The file will be saved as "test.svg".
+`--example layout_dump` prints the layout tree for a formula, which is where metric
+questions are answered; `--example qc` renders a grid of test formulas (SVG, and also a PNG
+when `vello_cpu` is enabled).
+
+# Renderers
+
+Layout is renderer independent: `Renderer::render` walks the layout and calls a `Backend`
+(`symbol`, `rule`, `bbox`, `begin_color`/`end_color`). Three backends ship:
+
+* `SvgBackend` — always available. Writes filled `<path>`s, so the file needs no font.
+* `VelloBackend` (feature `vello`) — records into a `vello::Scene`. Turning that into
+  pixels needs a wgpu device, so it is the backend for GPU hosts.
+* `CpuBackend` (feature `vello_cpu`) — rasterises on the CPU into a `vello_cpu::Pixmap`
+  and PNG, without a GPU. That is the one for tests and the command line.
+
+`BoundsBackend` draws nothing and reports the ink box, which a backend needs before it can
+be sized (a pixmap, a texture). Glyphs stay `pathfinder_content::Outline`s internally and
+are converted to kurbo paths in `render::bez`; `pathfinder_renderer`, `pathfinder_export`
+and `pathfinder_color` are no longer used.
 
 # License
 

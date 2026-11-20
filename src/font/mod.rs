@@ -5,7 +5,7 @@ mod style;
 pub use unicode_math::AtomType;
 pub use style::style_symbol;
 
-use font::{opentype::{OpenTypeFont, math::MathHeader}, GlyphId};
+use font::{opentype::{OpenTypeFont, math::MathHeader}, pathfinder_impl::OutlineEncoder, GlyphId};
 pub use font::opentype::math::{
     assembly::{Direction},
     MathConstants,
@@ -15,7 +15,15 @@ pub use font::opentype::math::{
 use crate::dimensions::{*};
 use crate::error::FontError;
 
-pub type MathFont = OpenTypeFont;
+/// Parsed glyphs are encoded as pathfinder outlines: `rex` keeps `pathfinder_content`
+/// as its geometry type, and kurbo paths are made from it in `render::bez`.
+pub type MathFont = OpenTypeFont<OutlineEncoder>;
+
+/// Parse a font, with the MATH table `rex` needs. Fails for anything that is not
+/// OpenType/CFF; the error is the font crate's, not rex's (that one is `Clone`).
+pub fn parse(data: &[u8]) -> Result<MathFont, font::FontError> {
+    OpenTypeFont::parse(data, &mut OutlineEncoder)
+}
 
 #[derive(Clone)]
 pub struct FontContext<'f> {
@@ -31,13 +39,15 @@ impl<'f> FontContext<'f> {
         self.glyph_from_gid(gid.0 as u16)
     }
     pub fn glyph_from_gid(&self, gid: u16) -> Result<Glyph<'f>, FontError> {
-        use font::{Font};
         let font = self.font;
         let hmetrics = font.glyph_metrics(gid).ok_or(FontError::MissingGlyphGID(gid))?;
         let italics = self.math.glyph_info.italics_correction_info.get(gid).map(|info| info.value).unwrap_or_default();
         let attachment = self.math.glyph_info.top_accent_attachment.get(gid).map(|info| info.value).unwrap_or_default();
-        let glyph = font.glyph(GlyphId(gid as u32)).ok_or(FontError::MissingGlyphGID(gid))?;
-        let bbox = glyph.path.bounds();
+        // A glyph's shape is `Simple`/`Compound`/`Empty` now; `flatten` composes compound
+        // glyphs, so the bounds are the real ink box rather than the first component's.
+        let outline = font::pathfinder_impl::flatten(font, GlyphId(gid as u32))
+            .ok_or(FontError::MissingGlyphGID(gid))?;
+        let bbox = outline.bounds();
         let ll = bbox.lower_left();
         let ur = bbox.upper_right();
 

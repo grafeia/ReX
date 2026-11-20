@@ -7,14 +7,23 @@ authors = [
 ]
 edition = "2018"
 
+[features]
+default = []
+# Record the layout into a `vello::Scene` (GPU / wgpu rendering).
+vello = ["dep:vello"]
+# Rasterise the layout on the CPU through `vello_cpu`, no GPU needed.
+vello_cpu = ["dep:vello_cpu"]
+
 [dependencies]
-font = { git = "https://github.com/pdf-rs/font", features=["woff"] }
+font = { git = "https://github.com/pdf-rs/font", branch = "vello", features = ["opentype", "woff", "math", "cff"] }
+# pathfinder stays as the geometry crate (`Outline`); its renderer, exporter and
+# colour crate are gone from this crate — see src/render/.
 pathfinder_geometry = { git = "https://github.com/servo/pathfinder/" }
-pathfinder_color = { git = "https://github.com/servo/pathfinder/" }
 pathfinder_content = { git = "https://github.com/servo/pathfinder/" }
-pathfinder_renderer = { git = "https://github.com/servo/pathfinder/" }
-pathfinder_export = { git = "https://github.com/servo/pathfinder/" }
 unicode-math = { git = "https://github.com/s3bk/unicode-math/" }
+kurbo = "0.13.1"
+vello = { version = "=0.11.0", optional = true }
+vello_cpu = { version = "0.3", optional = true, default-features = false, features = ["std", "png", "u8_pipeline", "f32_pipeline"] }
 
 serde_derive = "1.0"
 serde = "1.0"

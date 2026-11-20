@@ -12,8 +12,10 @@ Cargo.lock
 
 .vscode
 
-# Product of `qc` binary
+# Products of the `qc` example
 test.svg
+qc.svg
+qc.png
 
 # Products from testing
 *.tex

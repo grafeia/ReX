@@ -192,5 +192,17 @@ impl Renderer {
     }
 }
 
-pub mod scene;
-pub use scene::SceneWrapper;
+pub mod bez;
+pub mod bounds;
+pub mod svg;
+#[cfg(feature = "vello")]
+pub mod vello_backend;
+#[cfg(feature = "vello_cpu")]
+pub mod cpu;
+
+pub use bounds::BoundsBackend;
+pub use svg::{svg, SvgBackend};
+#[cfg(feature = "vello")]
+pub use vello_backend::VelloBackend;
+#[cfg(feature = "vello_cpu")]
+pub use cpu::CpuBackend;
